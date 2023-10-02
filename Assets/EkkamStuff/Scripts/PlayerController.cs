@@ -2,11 +2,27 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
+using UnityEngine.EventSystems;
 
 public class PlayerController : MonoBehaviour
 {
-    // [SerializeField] TMP_Text timerTextUp;
-    // [SerializeField] TMP_Text timerTextDown;
+
+    public Transform orientation;
+    public Transform player;
+    public Transform cameraObj;
+    public float rotationSpeed = 1f;
+    float horizontalInput;
+    float verticalInput;
+    Vector3 moveDirection;
+
+    public Vector3 currentCheckpoint;
+
+    public List<Vector3> previousPositions = new List<Vector3>();
+    public GameObject pastPlayer;
+    public GameObject pastPlayerTarget;
+    bool recordMovement = true;
+    GameObject pastPlayerInstance;
+    GameObject pastPlayerTargetInstance;
 
     Rigidbody rb;
     Animator anim;
@@ -16,6 +32,7 @@ public class PlayerController : MonoBehaviour
 
     public float speed = 1.0f;
     public float maxSpeed = 5.0f;
+    public float groundDrag;
 
     public bool isJumping = false;
     public bool isGrounded;
@@ -29,27 +46,47 @@ public class PlayerController : MonoBehaviour
     Vector3 targetVelocity;
     public float groundDistance = 1f;
 
-    float timerUp = 0f;
-    float timerDown = 0f;
-
     private void Start()
     {
         rb = GetComponent<Rigidbody>();
         anim = GetComponent<Animator>();
 
-        // displacement = initial velocity * time + 0.5 * acceleration due to gravity * time^2
-        // solving for acceleration: acceleration = -2 * displacement / (time^2)
         gravity = -2 * jumpHeightApex / (jumpDuration * jumpDuration);
-
-        // initialVelocity = acceleration * time
         initialJumpVelocity = Mathf.Abs(gravity) * jumpDuration;
+
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+
+        currentCheckpoint = new Vector3(0, 0.25f, -0.118f);
     }
 
     private void Update()
     {
-        // RaycastHit hit;
-        isGrounded = Physics.Raycast(transform.position + new Vector3(0, 1, 0), Vector3.down, groundDistance + 0.1f);
-        // visual aid for raycast
+        // Rotate orientation
+        Vector3 viewDirection = transform.position - new Vector3(cameraObj.position.x, transform.position.y, cameraObj.position.z);
+        orientation.forward = viewDirection.normalized;
+
+        horizontalInput = Input.GetAxis("Horizontal");
+        verticalInput = Input.GetAxis("Vertical");
+
+        moveDirection = orientation.forward * verticalInput + orientation.right * horizontalInput;
+         
+        if(moveDirection != Vector3.zero)
+        {
+            transform.forward = Vector3.Slerp(transform.forward, moveDirection.normalized, Time.deltaTime * rotationSpeed);
+            anim.SetBool("isMoving", true);
+        }
+        else
+        {
+            anim.SetBool("isMoving", false);
+        }
+
+        // Move player
+        MovePlayer();
+        ControlSpeed();
+
+        // Ground check
+        isGrounded = Physics.Raycast(transform.position + new Vector3(0, 0.5f, 0), Vector3.down, groundDistance + 0.1f);
         Debug.DrawRay(transform.position + new Vector3(0, 1, 0), Vector3.down * (groundDistance + 0.1f), Color.red);
 
         anim.SetFloat("PosX", rb.velocity.x);
@@ -76,55 +113,114 @@ public class PlayerController : MonoBehaviour
             anim.SetBool("isJumping", false);
         }
 
-        // // Move forward and backward with force
-        // if (Input.GetKey(KeyCode.W))
-        // {
-        //     rb.AddForce(Vector3.forward * 1f, ForceMode.Impulse);
-        // }
-        // else if (Input.GetKey(KeyCode.S))
-        // {
-        //     rb.AddForce(Vector3.back * 1f, ForceMode.Impulse);
-        // }
+        if (isGrounded)
+        {
+            rb.drag = groundDrag;
+        }
+        else
+        {
+            rb.drag = 0;
+        }
 
-        // if (Input.GetKey(KeyCode.A))
-        // {
-        //     rb.AddForce(Vector3.left * 1f, ForceMode.Impulse);
-        // }
-        // else if (Input.GetKey(KeyCode.D))
-        // {
-        //     rb.AddForce(Vector3.right * 1f, ForceMode.Impulse);
-        // }
+        // Respawn player if y is too low or if R is pressed
+        if (transform.position.y < -5 || Input.GetKeyDown(KeyCode.R))
+        {
+            ResetLevel();
+        }
 
-        targetVelocity = new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical"));
+        // Save previous positions if recordMovement is true
+        if (recordMovement)
+        {
+            previousPositions.Add(transform.position);
+        }
 
+        // Repeat past movement
+        if (Input.GetKeyDown(KeyCode.E) && anim.GetBool("isJumping") == false && anim.GetBool("isMoving") == false && recordMovement)
+        {
+            StartCoroutine(RepeatPastMovement());
+        }
 
-        // UpdateTimers();
+    }
+
+    void MovePlayer()
+    {
+        // Calculate movement direction
+        moveDirection = orientation.forward * verticalInput + orientation.right * horizontalInput;
+
+        rb.AddForce(moveDirection * speed * 10f, ForceMode.Force);
+    }
+
+    void ControlSpeed()
+    {
+        Vector3 flatVelocity = new Vector3(rb.velocity.x, 0, rb.velocity.z);
+
+        // Limit velocity if needed
+        if (flatVelocity.magnitude > maxSpeed)
+        {
+            Vector3 limitedVelocity = flatVelocity.normalized * maxSpeed;
+            rb.velocity = new Vector3(limitedVelocity.x, rb.velocity.y, limitedVelocity.z);
+        }
+    }
+
+    void ResetLevel()
+    {
+        rb.velocity = Vector3.zero;
+        transform.position = currentCheckpoint;
+        StopAllCoroutines();
+
+        if (pastPlayerInstance != null) Destroy(pastPlayerInstance);
+        if (pastPlayerTargetInstance != null) Destroy(pastPlayerTargetInstance);
+
+        previousPositions.Clear();
+        recordMovement = true;
+    }
+
+    IEnumerator RepeatPastMovement()
+    {
+        anim.SetTrigger("repeatHistory");
+        recordMovement = false;
+
+        yield return new WaitForSeconds(1.1f);
+
+        // Create past player
+        pastPlayerInstance = Instantiate(pastPlayer, currentCheckpoint, transform.rotation);
+
+        // Create past player target
+        pastPlayerTargetInstance = Instantiate(pastPlayerTarget, transform.position, transform.rotation);
+
+        // Remove duplicate positions from the beginning of the list
+        for (int i = 0; i < previousPositions.Count; i++)
+        {
+            if (previousPositions[i] == currentCheckpoint)
+            {
+                previousPositions.RemoveAt(i);
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        // Repeat past movement
+        for (int i = 0; i < previousPositions.Count; i++)
+        {
+            pastPlayerInstance.transform.position = previousPositions[i];
+
+            yield return new WaitForSeconds(0.01f);
+        }
+
+        // Destroy past player
+        Destroy(pastPlayerInstance);
+
+        // Destroy past player target
+        Destroy(pastPlayerTargetInstance);
+
+        previousPositions.Clear();
+        recordMovement = true;
     }
 
     void FixedUpdate()
     {
-
-        rb.AddForce(targetVelocity * speed, ForceMode.Acceleration);
-
-        // Cap x and z acceleration
-
-        if (rb.velocity.x > maxSpeed)
-        {
-            rb.velocity = new Vector3(maxSpeed, rb.velocity.y, rb.velocity.z);
-        }
-        else if (rb.velocity.x < -maxSpeed)
-        {
-            rb.velocity = new Vector3(-maxSpeed, rb.velocity.y, rb.velocity.z);
-        }
-
-        if (rb.velocity.z > maxSpeed)
-        {
-            rb.velocity = new Vector3(rb.velocity.x, rb.velocity.y, maxSpeed);
-        }
-        else if (rb.velocity.z < -maxSpeed)
-        {
-            rb.velocity = new Vector3(rb.velocity.x, rb.velocity.y, -maxSpeed);
-        }
 
         // Jumping
 
@@ -149,26 +245,8 @@ public class PlayerController : MonoBehaviour
         gravity = -2 * jumpHeightApex / (jumpDuration * jumpDuration);
         initialJumpVelocity = Mathf.Abs(gravity) * jumpDuration;
 
-        timerUp = 0f;
-        timerDown = 0f;
-
         isJumping = true;
         jumpStartTime = Time.time;
         rb.velocity = Vector3.up * initialJumpVelocity;
     }
-
-    // void UpdateTimers()
-    // {
-    //     if (rb.velocity.y > 0f)
-    //     {
-    //         timerUp += Time.deltaTime;
-    //     }
-    //     else if (rb.velocity.y < 0f)
-    //     {
-    //         timerDown += Time.deltaTime;
-    //     }
-
-    //     timerTextUp.text = "Up: " + timerUp.ToString("F2");
-    //     timerTextDown.text = "Down: " + timerDown.ToString("F2");
-    // }
 }
