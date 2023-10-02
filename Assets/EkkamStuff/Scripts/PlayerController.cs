@@ -6,6 +6,17 @@ using UnityEngine.EventSystems;
 
 public class PlayerController : MonoBehaviour
 {
+    public GameObject mainMenuCamera;
+    public GameObject promptsHUD;
+    public GameObject mainMenuHUD;
+    public AudioSource audioSource;
+    public AudioSource clockAudioSource;
+    public AudioClip jumpSound;
+    public AudioClip landSound;
+    public AudioClip buttonSound;
+    public AudioClip checkpointSound;
+    public AudioClip summonSound;
+    public AudioClip[] footstepSounds;
 
     public Transform orientation;
     public Transform player;
@@ -20,6 +31,8 @@ public class PlayerController : MonoBehaviour
     public List<Vector3> previousPositions = new List<Vector3>();
     public GameObject pastPlayer;
     public GameObject pastPlayerTarget;
+    public GameObject pathOrb;
+    Vector3 pastPlayerTargetPosition;
     bool recordMovement = true;
     GameObject pastPlayerInstance;
     GameObject pastPlayerTargetInstance;
@@ -54,8 +67,13 @@ public class PlayerController : MonoBehaviour
         gravity = -2 * jumpHeightApex / (jumpDuration * jumpDuration);
         initialJumpVelocity = Mathf.Abs(gravity) * jumpDuration;
 
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        promptsHUD.SetActive(false);
+        mainMenuHUD.SetActive(true);
+
+        mainMenuCamera.SetActive(true);
 
         currentCheckpoint = new Vector3(0, 0.25f, -0.118f);
     }
@@ -140,6 +158,12 @@ public class PlayerController : MonoBehaviour
             StartCoroutine(RepeatPastMovement());
         }
 
+        // Move past player
+        if (pastPlayerInstance != null)
+        {
+            pastPlayerInstance.transform.position = Vector3.Lerp(pastPlayerInstance.transform.position, pastPlayerTargetPosition, Time.deltaTime * 20f);
+        }
+
     }
 
     void MovePlayer()
@@ -171,7 +195,26 @@ public class PlayerController : MonoBehaviour
         if (pastPlayerInstance != null) Destroy(pastPlayerInstance);
         if (pastPlayerTargetInstance != null) Destroy(pastPlayerTargetInstance);
 
+        clockAudioSource.Stop();
+
         previousPositions.Clear();
+        ClearOrbs();
+        recordMovement = true;
+    }
+
+    public void SetCheckpoint(Vector3 checkpoint)
+    {
+        currentCheckpoint = checkpoint;
+
+        StopAllCoroutines();
+
+        if (pastPlayerInstance != null) Destroy(pastPlayerInstance);
+        if (pastPlayerTargetInstance != null) Destroy(pastPlayerTargetInstance);
+
+        clockAudioSource.Stop();
+
+        previousPositions.Clear();
+        ClearOrbs();
         recordMovement = true;
     }
 
@@ -179,6 +222,8 @@ public class PlayerController : MonoBehaviour
     {
         anim.SetTrigger("repeatHistory");
         recordMovement = false;
+
+        audioSource.PlayOneShot(summonSound);
 
         yield return new WaitForSeconds(1.1f);
 
@@ -204,9 +249,21 @@ public class PlayerController : MonoBehaviour
         // Repeat past movement
         for (int i = 0; i < previousPositions.Count; i++)
         {
-            pastPlayerInstance.transform.position = previousPositions[i];
+            // spawn path orbs every 60th position
+            if (i % 60 == 0)
+            {
+                Instantiate(pathOrb, previousPositions[i] + new Vector3(0, 1.5f, 0), Quaternion.identity);
+            }
+        }
 
-            yield return new WaitForSeconds(0.01f);
+        clockAudioSource.Play();
+
+        // Repeat past movement
+        for (int i = 0; i < previousPositions.Count; i++)
+        {
+            pastPlayerTargetPosition = previousPositions[i];
+
+            yield return new WaitForSeconds(0.002f);
         }
 
         // Destroy past player
@@ -215,8 +272,22 @@ public class PlayerController : MonoBehaviour
         // Destroy past player target
         Destroy(pastPlayerTargetInstance);
 
+        clockAudioSource.Stop();
+        audioSource.PlayOneShot(checkpointSound);
+
         previousPositions.Clear();
+        ClearOrbs();
         recordMovement = true;
+    }
+
+    void ClearOrbs()
+    {
+        GameObject[] orbs = GameObject.FindGameObjectsWithTag("Orb");
+
+        foreach (GameObject orb in orbs)
+        {
+            Destroy(orb);
+        }
     }
 
     void FixedUpdate()
@@ -241,6 +312,7 @@ public class PlayerController : MonoBehaviour
 
     void StartJump()
     {
+        audioSource.PlayOneShot(jumpSound);
         // Recalculate gravity and initial velocity in case they were changed in the inspector
         gravity = -2 * jumpHeightApex / (jumpDuration * jumpDuration);
         initialJumpVelocity = Mathf.Abs(gravity) * jumpDuration;
@@ -248,5 +320,33 @@ public class PlayerController : MonoBehaviour
         isJumping = true;
         jumpStartTime = Time.time;
         rb.velocity = Vector3.up * initialJumpVelocity;
+    }
+
+    public void LandOnGround()
+    {
+        audioSource.PlayOneShot(landSound);
+    }
+
+    public void PlayFootstepSound()
+    {
+        audioSource.PlayOneShot(footstepSounds[Random.Range(0, footstepSounds.Length)]);
+    }
+
+    public void PlayButtonPressed()
+    {
+        audioSource.PlayOneShot(buttonSound);
+
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+
+        promptsHUD.SetActive(true);
+        mainMenuHUD.SetActive(false);
+
+        mainMenuCamera.SetActive(false);
+    }
+
+    public void QuitButtonPressed()
+    {
+        Application.Quit();
     }
 }

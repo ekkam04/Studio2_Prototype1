@@ -6,6 +6,7 @@ using UnityEngine;
 public class PressurePlate : MonoBehaviour
 {
     [SerializeField] GameObject objectToActivate;
+    GameObject player;
 
     bool triggered = false;
     Collider playerCollider;
@@ -13,6 +14,7 @@ public class PressurePlate : MonoBehaviour
     void Start()
     {
         objectToActivate.SetActive(false);
+        player = GameObject.FindObjectOfType<PlayerController>().gameObject;
     }
 
     void Update()
@@ -29,6 +31,7 @@ public class PressurePlate : MonoBehaviour
     {
         if (col.gameObject.tag == "Player")
         {
+            player.gameObject.GetComponent<PlayerController>().audioSource.PlayOneShot(player.gameObject.GetComponent<PlayerController>().buttonSound);
             objectToActivate.SetActive(true);
             GetComponent<Renderer>().material.color = new Color32(0, 200, 255, 255);
             triggered = true;
