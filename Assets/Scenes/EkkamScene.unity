@@ -7552,7 +7552,7 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 614696706}
-  m_LocalRotation: {x: 0.26601598, y: -0.000000016586414, z: 0.000000004577173, w: 0.96396863}
+  m_LocalRotation: {x: 0.26601598, y: 0.000000016586407, z: -0.0000000045771715, w: 0.96396863}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -23326,7 +23326,7 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2059842804}
-  m_LocalRotation: {x: 0.31773803, y: -0.000000016314722, z: 0.0000000054671223, w: 0.9481785}
+  m_LocalRotation: {x: 0.31773803, y: 0.000000016314722, z: -0.0000000054671223, w: 0.9481785}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -24156,8 +24156,8 @@ MonoBehaviour:
   jumpHeightApex: 4
   jumpDuration: 1
   downwardsGravityMultiplier: 3
-  speed: 2
-  maxSpeed: 3
+  speed: 3
+  maxSpeed: 4
   groundDrag: 0
   isJumping: 0
   isGrounded: 0
